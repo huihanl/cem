@@ -6,6 +6,7 @@ from functools import partial
 import os
 import time
 
+from tqdm import tqdm
 from plotting import plot_history
 
 import roboverse
@@ -148,14 +149,14 @@ def run_cem(
 
         epochs=200,
         batch_size=4096,
-        elite_frac=0.2,
+        elite_frac=0.0625,
         randomize=True,
         extra_std=2.0,
         extra_decay_time=10,
 
         num_process=8
 ):
-    ensure_dir('./{}/'.format(env_id))
+    ensure_dir('./{}_small/'.format(env_id))
 
     start = time.time()
     num_episodes = epochs * num_process * batch_size
@@ -168,7 +169,7 @@ def run_cem(
     means = np.zeros(z_dim)
     stds = np.ones(z_dim)
 
-    for epoch in range(epochs):
+    for epoch in tqdm(range(epochs)):
 
         extra_cov = max(1.0 - epoch / extra_decay_time, 0) * extra_std**2
 
@@ -204,13 +205,22 @@ def run_cem(
                 history['std_elites'][-1]
             )
         )
+        
+        if epoch % 5 == 0:
+            end = time.time()
+            expt_time = end - start
+            plot_history(history, env_id, epoch, expt_time)
+            save_path_history = os.path.join('./{}_small/'.format(env_id), "history_{}.npy".format(epoch))
+            np.save(save_path_history, history)
+            save_path_elites = os.path.join('./{}_small/'.format(env_id), "elites_{}.npy".format(epoch))
+            np.save(save_path_elites, elites)
 
     end = time.time()
     expt_time = end - start
     print('expt took {:2.1f} seconds'.format(expt_time))
 
-    plot_history(history, env_id, num_episodes, expt_time)
-    num_optimal = 3
+    plot_history(history, env_id, epochs, expt_time)
+    num_optimal = 5
     print('epochs done - evaluating {} best zs'.format(num_optimal))
 
     best_z_rewards = [evaluate_z(z, randomize=randomize) for z in elites[:num_optimal]]
