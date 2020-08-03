@@ -5,8 +5,11 @@ from multiprocessing import Pool
 from functools import partial
 import os
 import time
-
+import logging
 from plotting import plot_history
+
+#log = logging.getLogger(os.path.basename(__file__))
+log = logging.getLogger(__name__)
 
 import roboverse
 import numpy as np
@@ -36,8 +39,6 @@ def normalize_by_dataset():
 
 
 mean, stddev = normalize_by_dataset()
-print("mean: ", mean)
-print("stddev: ", stddev)
 
 class PredictiveModelEnvWrapper:
 
@@ -101,8 +102,10 @@ def get_elite_indicies(num_elite, rewards):
 
 def create_env(randomize):
 
+    #model_dir = "/home/huihanl/precog_nick/logs/esp_train_results/2020-07/" \
     model_dir = "/nfs/kun1/users/huihanl/" \
-                "07-23-19-52-51_dataset.sawyer_dataset_no_append.SawyerDatasetNoAppend_bijection.basic_image_rnn.BasicImageRNNBijection"
+                "07-23-19-52-51_dataset.sawyer_dataset_no_append.SawyerDatasetNoAppend_bijection" \
+                ".basic_image_rnn.BasicImageRNNBijection"
 
     num_execution_per_step = 2
     single_obj_reward = 0
@@ -136,20 +139,21 @@ def evaluate_z(z, randomize):
     for i in range(12):
         z_action = z[i*4: (i+1)*4]
         next_observation, reward, done, info = env.step(z_action)
-        print("reward: ", reward)
         rewards.append(reward)
         if done:
             break
+    print("final reward: ", rewards[-1])
     return rewards[-1]
 
 
 def run_cem(
         env_id,
 
-        epochs=200,
+        epochs=50,
         batch_size=4096,
         elite_frac=0.2,
         randomize=True,
+
         extra_std=2.0,
         extra_decay_time=10,
 
@@ -159,7 +163,7 @@ def run_cem(
 
     start = time.time()
     num_episodes = epochs * num_process * batch_size
-    print('expt of {} total episodes'.format(num_episodes))
+    log.info('expt of {} total episodes'.format(num_episodes))
 
     num_elite = int(batch_size * elite_frac)
     history = defaultdict(list)
@@ -195,7 +199,8 @@ def run_cem(
         history['avg_elites'].append(np.mean(rewards[indicies]))
         history['std_elites'].append(np.std(rewards[indicies]))
 
-        print(
+
+        log.info(
             'epoch {} - {:2.1f} {:2.1f} pop - {:2.1f} {:2.1f} elites'.format(
                 epoch,
                 history['avg_rew'][-1],
@@ -205,26 +210,40 @@ def run_cem(
             )
         )
 
+        end = time.time()
+        expt_time = end - start
+        if epoch % 1 == 0:
+            plot_history(history, env_id, int(num_episodes * epoch / epochs), expt_time)
+            save_path_history = os.path.join('./{}/'.format(env_id), "history_{}.npy".format(epoch))
+            np.save(save_path_history, history)
+            save_path_elites = os.path.join('./{}/'.format(env_id), "elites_{}.npy".format(epoch))
+            np.save(save_path_elites, elites)
+            num_optimal = 10
+            log.info('epochs {} - evaluating {} best zs'.format(epoch, num_optimal))
+
+            best_z_rewards = [evaluate_z(z, randomize=randomize) for z in elites[:num_optimal]]
+            log.info('best rewards - {} across {} samples'.format(best_z_rewards, num_optimal))
+
     end = time.time()
     expt_time = end - start
-    print('expt took {:2.1f} seconds'.format(expt_time))
+    log.info('expt took {:2.1f} seconds'.format(expt_time))
 
     plot_history(history, env_id, num_episodes, expt_time)
     num_optimal = 3
-    print('epochs done - evaluating {} best zs'.format(num_optimal))
+    log.info('epochs done - evaluating {} best zs'.format(num_optimal))
 
     best_z_rewards = [evaluate_z(z, randomize=randomize) for z in elites[:num_optimal]]
-    print('best rewards - {} across {} samples'.format(best_z_rewards, num_optimal))
+    log.info('best rewards - {} across {} samples'.format(best_z_rewards, num_optimal))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--env', default="SawyerGraspOneV2-v0")
     parser.add_argument('--num_process', default=8, nargs='?', type=int)
-    parser.add_argument('--epochs', default=200, nargs='?', type=int)
+    parser.add_argument('--epochs', default=50, nargs='?', type=int)
     parser.add_argument('--batch_size', default=4096, nargs='?', type=int)
-    parser.add_argument('--randomize', default=True, nargs='?', type=bool)
     args = parser.parse_args()
-    print(args)
+    log.info(args)
 
-    run_cem(args.env, num_process=args.num_process, epochs=args.epochs, batch_size=args.batch_size, randomize=args.randomize)
+    run_cem(args.env, num_process=args.num_process, epochs=args.epochs,
+            randomize=args.randomize, batch_size=args.batch_size)
