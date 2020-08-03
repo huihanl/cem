@@ -14,7 +14,7 @@ import gym
 from precog.predictive_env import PredictiveModel
 import roboverse.bullet as bullet
 
-unnorm_data_path = "/home/huihanl/bm-new/data/all_random_grasping_replayed/all.npy"
+unnorm_data_path = "/nfs/kun1/users/huihanl/all.npy"
 
 def normalize_by_dataset():
     if unnorm_data_path == "":
@@ -99,9 +99,9 @@ def ensure_dir(file_path):
 def get_elite_indicies(num_elite, rewards):
     return heapq.nlargest(num_elite, range(len(rewards)), rewards.take)
 
-def create_env():
+def create_env(randomize):
 
-    model_dir = "/home/huihanl/precog_nick/logs/esp_train_results/2020-07/" \
+    model_dir = "/nfs/kun1/users/huihanl/" \
                 "07-23-19-52-51_dataset.sawyer_dataset_no_append.SawyerDatasetNoAppend_bijection.basic_image_rnn.BasicImageRNNBijection"
 
     num_execution_per_step = 2
@@ -115,7 +115,7 @@ def create_env():
                           (0.6694743281369817, 0.26676337932361205, -0.3440640126774397)]
 
     base_env = roboverse.make(
-        "SawyerGraspOneV2-v0", gui=False, randomize=False,
+        "SawyerGraspOneV2-v0", gui=False, randomize=randomize,
         observation_mode="pixels_debug", reward_type=reward_type,
         single_obj_reward=single_obj_reward,
         normalize_and_flatten=True,
@@ -129,8 +129,8 @@ def create_env():
     return env
 
 
-def evaluate_z(z):
-    env = create_env()
+def evaluate_z(z, randomize):
+    env = create_env(randomize)
     env.reset()
     rewards = []
     for i in range(12):
@@ -146,10 +146,10 @@ def evaluate_z(z):
 def run_cem(
         env_id,
 
-        epochs=50,
+        epochs=200,
         batch_size=4096,
         elite_frac=0.2,
-
+        randomize=True,
         extra_std=2.0,
         extra_decay_time=10,
 
@@ -179,7 +179,7 @@ def run_cem(
         )
 
         with Pool(num_process) as p:
-            rewards = p.map(partial(evaluate_z), zs)
+            rewards = p.map(partial(evaluate_z, randomize=randomize), zs)
 
         rewards = np.array(rewards)
 
@@ -213,17 +213,18 @@ def run_cem(
     num_optimal = 3
     print('epochs done - evaluating {} best zs'.format(num_optimal))
 
-    best_z_rewards = [evaluate_z(z) for z in elites[:num_optimal]]
+    best_z_rewards = [evaluate_z(z, randomize=randomize) for z in elites[:num_optimal]]
     print('best rewards - {} across {} samples'.format(best_z_rewards, num_optimal))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--env', default="SawyerGraspOneV2-v0")
-    parser.add_argument('--num_process', default=16, nargs='?', type=int)
-    parser.add_argument('--epochs', default=50, nargs='?', type=int)
+    parser.add_argument('--num_process', default=8, nargs='?', type=int)
+    parser.add_argument('--epochs', default=200, nargs='?', type=int)
     parser.add_argument('--batch_size', default=4096, nargs='?', type=int)
+    parser.add_argument('--randomize', default=True, nargs='?', type=bool)
     args = parser.parse_args()
     print(args)
 
-    run_cem(args.env, num_process=args.num_process, epochs=args.epochs, batch_size=args.batch_size)
+    run_cem(args.env, num_process=args.num_process, epochs=args.epochs, batch_size=args.batch_size, randomize=args.randomize)
