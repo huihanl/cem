@@ -15,16 +15,14 @@ import gym
 from precog.predictive_env import PredictiveModel
 import roboverse.bullet as bullet
 
-unnorm_data_path = "/nfs/kun1/users/huihanl/all.npy"
+unnorm_data_path_server = "/nfs/kun1/users/huihanl/all.npy"
+unnorm_data_path_local = "/home/huihanl/bm-new/data/all_random_grasping_replayed/all.npy"
 
 def normalize_by_dataset():
-    if unnorm_data_path == "":
-        return 0, 1
-    unnorm_data = np.load(unnorm_data_path, allow_pickle=True)
-    """
-    for data_id in range(len(unnorm_data)):
-        unnorm_data[data_id]["actions"] = unnorm_data[data_id]["actions"] + [np.array([0, 0, 0, 0])] * T
-    """
+    try:
+        unnorm_data = np.load(unnorm_data_path_server, allow_pickle=True)
+    except:
+        unnorm_data = np.load(unnorm_data_path_local, allow_pickle=True)
     all_actions = []
     for traj_id in range(len(unnorm_data)):
         all_actions.extend(unnorm_data[traj_id]["actions"])
@@ -88,6 +86,7 @@ class PredictiveModelEnvWrapper:
     def __getattr__(self, attr):
         return getattr(self.base_env, attr)
 
+
 def ensure_dir(file_path):
     directory = os.path.dirname(file_path)
 
@@ -95,21 +94,36 @@ def ensure_dir(file_path):
         os.makedirs(directory)
 
 
-def get_elite_indicies(num_elite, rewards):
-    return heapq.nlargest(num_elite, range(len(rewards)), rewards.take)
+def get_elite_indicies_num(num_elite, returns):
+    return heapq.nlargest(num_elite, range(len(returns)), returns.take)
 
-def create_env(randomize):
 
-    #model_dir = "/home/huihanl/precog_nick/logs/esp_train_results/2020-07/" \
-    model_dir = "/nfs/kun1/users/huihanl/" \
+def get_elite_indicies_success(successes):
+    num_elite = np.count_nonzero(successes)
+    return heapq.nlargest(num_elite, range(len(successes)), successes.take)
+
+
+def get_elite_indicies(num_elite, returns, successes, only_success_elite):
+    if only_success_elite:
+        indexes = get_elite_indicies_success(successes)
+        if len(indexes) < 3:
+            indexes.extend(get_elite_indicies_num(3, returns))
+    else:
+        indexes = get_elite_indicies_num(num_elite, returns)
+    return indexes
+
+
+def create_env(randomize, reward_type):
+
+    model_dir_local = "/home/huihanl/precog_nick/logs/esp_train_results/2020-07/" \
+                "07-23-19-52-51_dataset.sawyer_dataset_no_append.SawyerDatasetNoAppend_bijection" \
+                ".basic_image_rnn.BasicImageRNNBijection"
+    model_dir_server = "/nfs/kun1/users/huihanl/" \
                 "07-23-19-52-51_dataset.sawyer_dataset_no_append.SawyerDatasetNoAppend_bijection" \
                 ".basic_image_rnn.BasicImageRNNBijection"
 
     num_execution_per_step = 2
     single_obj_reward = 0
-    trimodal_positions_choice = 0
-    reward_type = "dense"
-    all_random = True
 
     trimodal_positions = [(0.8187814400771692, 0.21049907010351596, -0.3415106684025205),
                           (0.739567302423451, 0.14341819851789023, -0.341380192135101),
@@ -120,28 +134,34 @@ def create_env(randomize):
         observation_mode="pixels_debug", reward_type=reward_type,
         single_obj_reward=single_obj_reward,
         normalize_and_flatten=True,
-        all_random=all_random,
+        all_random=True,
         trimodal_positions=trimodal_positions)
 
     img_width, img_height = base_env.obs_img_dim, base_env.obs_img_dim
 
-    env = PredictiveModelEnvWrapper(model_dir, num_execution_per_step, base_env=base_env, img_dim=img_width)
+    try:
+        env = PredictiveModelEnvWrapper(model_dir_server, num_execution_per_step, base_env=base_env, img_dim=img_width)
+    except:
+        env = PredictiveModelEnvWrapper(model_dir_local, num_execution_per_step, base_env=base_env, img_dim=img_width)
 
     return env
 
 
-def evaluate_z(z, randomize):
-    env = create_env(randomize)
+def evaluate_z(z, randomize, reward_type):
+    env = create_env(randomize, reward_type)
     env.reset()
     rewards = []
+    success = 0
     for i in range(12):
         z_action = z[i*4: (i+1)*4]
         next_observation, reward, done, info = env.step(z_action)
         rewards.append(reward)
         if done:
+            if info["grasp_success"]:
+                success = 1
             break
-    print("final reward: ", rewards[-1])
-    return rewards[-1]
+    returns = sum(rewards)
+    return returns, success
 
 
 def run_cem(
@@ -150,13 +170,17 @@ def run_cem(
         epochs=50,
         batch_size=4096,
         elite_frac=0.0625,
+
         randomize=True,
+        only_success_elite=False,
+        reward_type="sparse",
 
         extra_std=2.0,
         extra_decay_time=10,
 
         num_process=8
 ):
+
     ensure_dir('./{}_small/'.format(env_id))
 
     start = time.time()
@@ -171,7 +195,7 @@ def run_cem(
     stds = np.ones(z_dim)
 
     for epoch in tqdm(range(epochs)):
-
+        print("current epoch number: ", epoch)
         extra_cov = max(1.0 - epoch / extra_decay_time, 0) * extra_std**2
 
         zs = np.random.multivariate_normal(
@@ -181,21 +205,27 @@ def run_cem(
         )
 
         with Pool(num_process) as p:
-            rewards = p.map(partial(evaluate_z, randomize=randomize), zs)
+            returns, successes = p.map(partial(evaluate_z, randomize=randomize, reward_type=reward_type), zs)
 
-        rewards = np.array(rewards)
+        returns = np.array(returns)
+        successes = np.array(successes)
 
-        indicies = get_elite_indicies(num_elite, rewards)
-        elites = zs[indicies]
+        indexes = get_elite_indicies(num_elite, returns, successes, only_success_elite)
+
+        elites = zs[indexes]
 
         means = elites.mean(axis=0)
         stds = elites.std(axis=0)
 
         history['epoch'].append(epoch)
-        history['avg_rew'].append(np.mean(rewards))
-        history['std_rew'].append(np.std(rewards))
-        history['avg_elites'].append(np.mean(rewards[indicies]))
-        history['std_elites'].append(np.std(rewards[indicies]))
+        history['avg_ret'].append(np.mean(returns))
+        history['std_ret'].append(np.std(returns))
+        history['avg_ret_elites'].append(np.mean(returns[indexes]))
+        history['std_ret_elites'].append(np.std(returns[indexes]))
+        history['avg_suc'].append(np.mean(successes))
+        history['std_suc'].append(np.std(successes))
+        history['avg_suc_elites'].append(np.mean(successes[indexes]))
+        history['std_suc_elites'].append(np.std(successes[indexes]))
 
 
         print(
@@ -225,7 +255,7 @@ def run_cem(
     num_optimal = 5
     print('epochs done - evaluating {} best zs'.format(num_optimal))
 
-    best_z_rewards = [evaluate_z(z, randomize=randomize) for z in elites[:num_optimal]]
+    best_z_rewards = [evaluate_z(z, randomize=randomize, reward_type=reward_type) for z in elites[:num_optimal]]
     print('best rewards - {} across {} samples'.format(best_z_rewards, num_optimal))
 
 
@@ -236,8 +266,16 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', default=50, nargs='?', type=int)
     parser.add_argument('--batch_size', default=4096, nargs='?', type=int)
     parser.add_argument('--randomize', default=False, nargs='?', type=bool)
+    parser.add_argument('--only_success_elite', default=False, nargs='?', type=bool)
+    parser.add_argument('--reward_type', default="sparse", nargs='?', type=str)
     args = parser.parse_args()
     print(args)
 
-    run_cem(args.env, num_process=args.num_process, epochs=args.epochs,
-            randomize=args.randomize, batch_size=args.batch_size)
+    run_cem(args.env,
+            num_process=args.num_process,
+            epochs=args.epochs,
+            randomize=args.randomize,
+            batch_size=args.batch_size,
+            only_success_elite=args.only_success_elite,
+            reward_type=args.reward_type,
+            )
