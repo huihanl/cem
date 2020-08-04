@@ -37,8 +37,6 @@ def normalize_by_dataset():
 
 
 mean, stddev = normalize_by_dataset()
-print("mean: ", mean)
-print("stddev: ", stddev)
 
 class PredictiveModelEnvWrapper:
 
@@ -102,8 +100,10 @@ def get_elite_indicies(num_elite, rewards):
 
 def create_env(randomize):
 
+    #model_dir = "/home/huihanl/precog_nick/logs/esp_train_results/2020-07/" \
     model_dir = "/nfs/kun1/users/huihanl/" \
-                "07-23-19-52-51_dataset.sawyer_dataset_no_append.SawyerDatasetNoAppend_bijection.basic_image_rnn.BasicImageRNNBijection"
+                "07-23-19-52-51_dataset.sawyer_dataset_no_append.SawyerDatasetNoAppend_bijection" \
+                ".basic_image_rnn.BasicImageRNNBijection"
 
     num_execution_per_step = 2
     single_obj_reward = 0
@@ -137,20 +137,21 @@ def evaluate_z(z, randomize):
     for i in range(12):
         z_action = z[i*4: (i+1)*4]
         next_observation, reward, done, info = env.step(z_action)
-        print("reward: ", reward)
         rewards.append(reward)
         if done:
             break
+    print("final reward: ", rewards[-1])
     return rewards[-1]
 
 
 def run_cem(
         env_id,
 
-        epochs=200,
+        epochs=50,
         batch_size=4096,
         elite_frac=0.0625,
         randomize=True,
+
         extra_std=2.0,
         extra_decay_time=10,
 
@@ -196,6 +197,7 @@ def run_cem(
         history['avg_elites'].append(np.mean(rewards[indicies]))
         history['std_elites'].append(np.std(rewards[indicies]))
 
+
         print(
             'epoch {} - {:2.1f} {:2.1f} pop - {:2.1f} {:2.1f} elites'.format(
                 epoch,
@@ -231,10 +233,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--env', default="SawyerGraspOneV2-v0")
     parser.add_argument('--num_process', default=8, nargs='?', type=int)
-    parser.add_argument('--epochs', default=200, nargs='?', type=int)
+    parser.add_argument('--epochs', default=50, nargs='?', type=int)
     parser.add_argument('--batch_size', default=4096, nargs='?', type=int)
-    parser.add_argument('--randomize', default=True, nargs='?', type=bool)
+    parser.add_argument('--randomize', default=False, nargs='?', type=bool)
     args = parser.parse_args()
     print(args)
 
-    run_cem(args.env, num_process=args.num_process, epochs=args.epochs, batch_size=args.batch_size, randomize=args.randomize)
+    run_cem(args.env, num_process=args.num_process, epochs=args.epochs,
+            randomize=args.randomize, batch_size=args.batch_size)
