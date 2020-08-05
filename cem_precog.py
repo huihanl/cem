@@ -65,11 +65,11 @@ class PredictiveModelEnvWrapper:
             obs, reward, done, info = self.base_env.step(a)
             total_reward += reward
 
-        quat = obs["state"][3:7]
-        theta = bullet.quat_to_deg(quat)[2]
-        state = np.array([obs["state"][0], obs["state"][1], obs["state"][2], theta]).reshape([1, self.state_dim])
+            quat = obs["state"][3:7]
+            theta = bullet.quat_to_deg(quat)[2]
+            state = np.array([obs["state"][0], obs["state"][1], obs["state"][2], theta]).reshape([1, self.state_dim])
+            self.past = np.concatenate([self.past, state], axis=0)
 
-        self.past = np.concatenate([self.past, state], axis=0)
         return obs, total_reward, done, info
 
     def _set_action_space(self):
@@ -161,7 +161,7 @@ def evaluate_z(z, randomize, reward_type):
                 success = 1
             break
     returns = sum(rewards)
-    return returns, success
+    return (returns, success)
 
 
 def run_cem(
@@ -205,7 +205,11 @@ def run_cem(
         )
 
         with Pool(num_process) as p:
-            returns, successes = p.map(partial(evaluate_z, randomize=randomize, reward_type=reward_type), zs)
+            returns_successes = p.map(partial(evaluate_z, randomize=randomize, reward_type=reward_type), zs)
+
+        print(returns_successes)
+        returns = [rs[0] for rs in returns_successes]
+        successes = [rs[1] for rs in returns_successes]
 
         returns = np.array(returns)
         successes = np.array(successes)
@@ -229,16 +233,26 @@ def run_cem(
 
 
         print(
-            'epoch {} - {:2.1f} {:2.1f} pop - {:2.1f} {:2.1f} elites'.format(
+            'epoch {} - population returns: {} {} - elite returns: {} {}'.format(
                 epoch,
-                history['avg_rew'][-1],
-                history['std_rew'][-1],
-                history['avg_elites'][-1],
-                history['std_elites'][-1]
+                history['avg_ret'][-1],
+                history['std_ret'][-1],
+                history['avg_ret_elites'][-1],
+                history['std_ret_elites'][-1]
+            )
+        )
+
+        print(
+            'epoch {} - population successes: {} {} - elite successes: {} {}'.format(
+                epoch,
+                history['avg_suc'][-1],
+                history['std_suc'][-1],
+                history['avg_suc_elites'][-1],
+                history['std_suc_elites'][-1]
             )
         )
         
-        if epoch % 5 == 0:
+        if True: #epoch % 5 == 0:
             end = time.time()
             expt_time = end - start
             plot_history(history, env_id, epoch, expt_time)
@@ -262,12 +276,12 @@ def run_cem(
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--env', default="SawyerGraspOneV2-v0")
-    parser.add_argument('--num_process', default=8, nargs='?', type=int)
-    parser.add_argument('--epochs', default=50, nargs='?', type=int)
-    parser.add_argument('--batch_size', default=4096, nargs='?', type=int)
-    parser.add_argument('--randomize', default=False, nargs='?', type=bool)
-    parser.add_argument('--only_success_elite', default=False, nargs='?', type=bool)
-    parser.add_argument('--reward_type', default="sparse", nargs='?', type=str)
+    parser.add_argument('--num_process', default=8, type=int)
+    parser.add_argument('--epochs', default=50, type=int)
+    parser.add_argument('--batch_size', default=4096, type=int)
+    parser.add_argument('--randomize', default=False, type=bool)
+    parser.add_argument('--only_success_elite', default=False, type=bool)
+    parser.add_argument('--reward_type', default="sparse", type=str)
     args = parser.parse_args()
     print(args)
 
