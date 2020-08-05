@@ -19,6 +19,7 @@ unnorm_data_path_server = "/nfs/kun1/users/huihanl/all.npy"
 unnorm_data_path_local = "/home/huihanl/bm-new/data/all_random_grasping_replayed/all.npy"
 
 def normalize_by_dataset():
+    """
     try:
         unnorm_data = np.load(unnorm_data_path_server, allow_pickle=True)
     except:
@@ -31,6 +32,9 @@ def normalize_by_dataset():
     stddev = np.std(all_actions, axis=0)
     if stddev[3] == 0.0:
         stddev[3] = 1
+    """
+    mean = np.array([0.07205797, -0.02857389, -0.28423747, -0.64467074])
+    stddev = np.array([0.14842513, 0.14714153, 0.10333442, 1.15283709])
     return mean, stddev
 
 
@@ -122,6 +126,7 @@ def create_env(randomize, reward_type):
                 "07-23-19-52-51_dataset.sawyer_dataset_no_append.SawyerDatasetNoAppend_bijection" \
                 ".basic_image_rnn.BasicImageRNNBijection"
 
+    model_dir_aws = "/home/ubuntu/07-23-19-52-51_dataset.sawyer_dataset_no_append.SawyerDatasetNoAppend_bijection.basic_image_rnn.BasicImageRNNBijection"
     num_execution_per_step = 2
     single_obj_reward = 0
 
@@ -139,10 +144,7 @@ def create_env(randomize, reward_type):
 
     img_width, img_height = base_env.obs_img_dim, base_env.obs_img_dim
 
-    try:
-        env = PredictiveModelEnvWrapper(model_dir_server, num_execution_per_step, base_env=base_env, img_dim=img_width)
-    except:
-        env = PredictiveModelEnvWrapper(model_dir_local, num_execution_per_step, base_env=base_env, img_dim=img_width)
+    env = PredictiveModelEnvWrapper(model_dir_aws, num_execution_per_step, base_env=base_env, img_dim=img_width)
 
     return env
 
@@ -193,7 +195,31 @@ def run_cem(
     z_dim = 4 * 12
     means = np.zeros(z_dim)
     stds = np.ones(z_dim)
+    """
+    means = np.array([ 1.65197356e+00,  8.33035765e-01, -2.73806606e+00, -9.39083659e+00,
+       -1.32641180e+00,  1.34796907e+00, -4.39907399e+00,  2.96752109e-02,
+       -5.28217566e+00,  2.68501350e+00,  8.30397329e-01, -5.75019933e+00,
+       -2.07555961e+00,  3.47966530e+00,  2.08757323e-02, -3.76048716e+00,
+       -1.09595671e+01, -9.73388848e-01,  6.28140012e+00, -1.66969927e+00,
+       -3.45152822e+00, -5.77932245e-01,  2.86222533e+00, -2.68503091e+00,
+       -3.01868533e+00,  2.80623461e+00,  1.32927668e+00, -1.04282006e+01,
+        3.48147241e+00,  2.45379845e+00,  3.47325729e-01, -2.14552639e+00,
+       -1.00232540e+00, -5.68986553e+00,  7.21486197e+00,  1.68652072e+00,
+        4.01795577e+00, -3.79909944e+00,  2.70573071e+00,  4.45538085e+00,
+        1.77050531e+00,  1.03674274e-02, -1.15290281e+00, -2.97591161e+00,
+       -1.97335816e+00, -5.03177680e+00,  8.17897135e+00,  1.20922175e-01])
 
+    stds = np.array([1.53942298, 1.63754783, 1.92875715, 4.27411653, 2.00356356,
+       2.90285294, 1.22056084, 1.03707501, 1.54641918, 2.75776665,
+       3.91651552, 2.18495135, 2.49650792, 2.24187849, 1.40009829,
+       8.50756004, 3.83215395, 3.22030329, 2.45089894, 2.1153136 ,
+       1.50627621, 6.02094659, 2.91460466, 2.68817964, 1.33393983,
+       3.54215773, 1.44768608, 7.5301275 , 2.07357647, 1.82348095,
+       2.66848378, 2.05879574, 1.40656172, 2.16218571, 1.23910328,
+       3.94362322, 1.83934349, 3.31770819, 2.77678703, 3.66792368,
+       1.78578727, 5.06922732, 1.2939786 , 3.08481407, 4.58483559,
+       2.1761525 , 2.40944297, 1.9975706 ])
+    """
     for epoch in tqdm(range(epochs)):
         print("current epoch number: ", epoch)
         extra_cov = max(1.0 - epoch / extra_decay_time, 0) * extra_std**2
