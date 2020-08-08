@@ -117,7 +117,7 @@ def get_elite_indicies(num_elite, returns, successes, only_success_elite):
     return indexes
 
 
-def create_env(randomize, reward_type):
+def create_env(randomize, reward_type, single_obj_reward):
 
     model_dir_local = "/home/huihanl/precog_nick/logs/esp_train_results/2020-07/" \
                 "07-23-19-52-51_dataset.sawyer_dataset_no_append.SawyerDatasetNoAppend_bijection" \
@@ -128,7 +128,6 @@ def create_env(randomize, reward_type):
 
     model_dir_aws = "/home/ubuntu/07-23-19-52-51_dataset.sawyer_dataset_no_append.SawyerDatasetNoAppend_bijection.basic_image_rnn.BasicImageRNNBijection"
     num_execution_per_step = 2
-    single_obj_reward = 0
 
     trimodal_positions = [(0.8187814400771692, 0.21049907010351596, -0.3415106684025205),
                           (0.739567302423451, 0.14341819851789023, -0.341380192135101),
@@ -149,8 +148,8 @@ def create_env(randomize, reward_type):
     return env
 
 
-def evaluate_z(z, randomize, reward_type):
-    env = create_env(randomize, reward_type)
+def evaluate_z(z, randomize, reward_type, single_obj_reward):
+    env = create_env(randomize, reward_type, single_obj_reward)
     env.reset()
     rewards = []
     success = 0
@@ -195,31 +194,7 @@ def run_cem(
     z_dim = 4 * 12
     means = np.zeros(z_dim)
     stds = np.ones(z_dim)
-    """
-    means = np.array([ 1.65197356e+00,  8.33035765e-01, -2.73806606e+00, -9.39083659e+00,
-       -1.32641180e+00,  1.34796907e+00, -4.39907399e+00,  2.96752109e-02,
-       -5.28217566e+00,  2.68501350e+00,  8.30397329e-01, -5.75019933e+00,
-       -2.07555961e+00,  3.47966530e+00,  2.08757323e-02, -3.76048716e+00,
-       -1.09595671e+01, -9.73388848e-01,  6.28140012e+00, -1.66969927e+00,
-       -3.45152822e+00, -5.77932245e-01,  2.86222533e+00, -2.68503091e+00,
-       -3.01868533e+00,  2.80623461e+00,  1.32927668e+00, -1.04282006e+01,
-        3.48147241e+00,  2.45379845e+00,  3.47325729e-01, -2.14552639e+00,
-       -1.00232540e+00, -5.68986553e+00,  7.21486197e+00,  1.68652072e+00,
-        4.01795577e+00, -3.79909944e+00,  2.70573071e+00,  4.45538085e+00,
-        1.77050531e+00,  1.03674274e-02, -1.15290281e+00, -2.97591161e+00,
-       -1.97335816e+00, -5.03177680e+00,  8.17897135e+00,  1.20922175e-01])
 
-    stds = np.array([1.53942298, 1.63754783, 1.92875715, 4.27411653, 2.00356356,
-       2.90285294, 1.22056084, 1.03707501, 1.54641918, 2.75776665,
-       3.91651552, 2.18495135, 2.49650792, 2.24187849, 1.40009829,
-       8.50756004, 3.83215395, 3.22030329, 2.45089894, 2.1153136 ,
-       1.50627621, 6.02094659, 2.91460466, 2.68817964, 1.33393983,
-       3.54215773, 1.44768608, 7.5301275 , 2.07357647, 1.82348095,
-       2.66848378, 2.05879574, 1.40656172, 2.16218571, 1.23910328,
-       3.94362322, 1.83934349, 3.31770819, 2.77678703, 3.66792368,
-       1.78578727, 5.06922732, 1.2939786 , 3.08481407, 4.58483559,
-       2.1761525 , 2.40944297, 1.9975706 ])
-    """
     for epoch in tqdm(range(epochs)):
         print("current epoch number: ", epoch)
         extra_cov = max(1.0 - epoch / extra_decay_time, 0) * extra_std**2
@@ -256,7 +231,6 @@ def run_cem(
         history['std_suc'].append(np.std(successes))
         history['avg_suc_elites'].append(np.mean(successes[indexes]))
         history['std_suc_elites'].append(np.std(successes[indexes]))
-
 
         print(
             'epoch {} - population returns: {} {} - elite returns: {} {}'.format(
@@ -308,6 +282,7 @@ if __name__ == '__main__':
     parser.add_argument('--randomize', default=False, type=bool)
     parser.add_argument('--only_success_elite', default=False, type=bool)
     parser.add_argument('--reward_type', default="sparse", type=str)
+    parser.add_argument('--single_obj_reward', required=True, type=int)
     args = parser.parse_args()
     print(args)
 
