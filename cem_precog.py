@@ -117,7 +117,7 @@ def get_elite_indicies(num_elite, returns, successes, only_success_elite):
     return indexes
 
 
-def create_env(randomize, reward_type, single_obj_reward):
+def create_env(randomize, reward_type, env_index, single_obj_reward):
 
     model_dir_local = "/home/huihanl/precog_nick/logs/esp_train_results/2020-07/" \
                 "07-23-19-52-51_dataset.sawyer_dataset_no_append.SawyerDatasetNoAppend_bijection" \
@@ -184,7 +184,7 @@ def generate_video(video_frames, savedir, index, fps=60):
 
 
 def evaluate_z(z, randomize, reward_type, output_dir, epoch, env_index, single_obj_reward):
-    env = create_env(randomize, reward_type, single_obj_reward)
+    env = create_env(randomize, reward_type, env_index, single_obj_reward)
     env.reset()
     rewards = []
     success = 0
