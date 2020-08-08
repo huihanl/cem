@@ -1,9 +1,9 @@
 import matplotlib.pyplot as plt
 
 
-def plot_history(history, env_id, epoch, expt_time):
+def plot_history(history, output_dir, epoch, expt_time):
     f, ax = plt.subplots(nrows=4, sharex=True, figsize=(20, 10))
-    f.suptitle('{} at epoch {}, {:0.0f} seconds'.format(env_id, epoch, expt_time))
+    f.suptitle('at epoch {}, {:0.0f} seconds'.format(epoch, expt_time))
     ax[0].plot(history['epoch'], history['avg_ret'], label='population')
     ax[0].plot(history['epoch'], history['avg_ret_elites'], label='elite')
     ax[0].legend()
@@ -26,5 +26,5 @@ def plot_history(history, env_id, epoch, expt_time):
 
     ax[3].set_xlabel('epoch')
 
-    f.savefig('./{}_small/learning_{}.png'.format(env_id, epoch))
+    f.savefig('{}/learning_{}.png'.format(output_dir, epoch))
     plt.clf()
