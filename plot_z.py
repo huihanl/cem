@@ -23,6 +23,9 @@ for i in range(12):
         ax.scatter3D(this_z[0], this_z[1], this_z[2])
 
     z_dir = os.path.join("test_z", elite_path[:-4])
-    ensure_dir(z_dir)
+    try:
+    	os.makedirs(z_dir)
+    except:
+    	pass
     fig.savefig(os.path.join(z_dir, "z_action_{}.png".format(i)))
     plt.clf()
