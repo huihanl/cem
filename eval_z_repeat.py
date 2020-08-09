@@ -19,20 +19,7 @@ unnorm_data_path_server = "/nfs/kun1/users/huihanl/all.npy"
 unnorm_data_path_local = "/home/huihanl/bm-new/data/all_random_grasping_replayed/all.npy"
 
 def normalize_by_dataset():
-    """
-    try:
-        unnorm_data = np.load(unnorm_data_path_server, allow_pickle=True)
-    except:
-        unnorm_data = np.load(unnorm_data_path_local, allow_pickle=True)
-    all_actions = []
-    for traj_id in range(len(unnorm_data)):
-        all_actions.extend(unnorm_data[traj_id]["actions"])
-    all_actions = np.array(all_actions)
-    mean = np.mean(all_actions, axis=0)
-    stddev = np.std(all_actions, axis=0)
-    if stddev[3] == 0.0:
-        stddev[3] = 1
-    """
+
     mean = np.array([0.07205797, -0.02857389, -0.28423747, -0.64467074])
     stddev = np.array([0.14842513, 0.14714153, 0.10333442, 1.15283709])
     return mean, stddev
@@ -169,25 +156,36 @@ def create_env(randomize, reward_type, env_index, single_obj_reward):
 
     return env
 
-def evaluate_z(z, randomize, reward_type, output_dir, epoch, env_index, single_obj_reward):
+def evaluate_z(z, randomize, reward_type, output_dir, z_id, env_index, single_obj_reward):
     env = create_env(randomize, reward_type, env_index, single_obj_reward)
 
-    env.reset()
-    rewards = []
-    success = 0
-    images = []
-    for i in range(12):
-        z_action = z[i*4: (i+1)*4]
-        next_observation, reward, done, info = env.step(z_action)
-        rewards.append(reward)
-        images.append(env.render_obs())
-        if done:
-            if info["grasp_success"]:
-                success = 1
-            break
-    returns = sum(rewards)
-
-    return (returns, success)
+    returns_list = []
+    success_list = []
+    for trial in range(10):
+        env.reset()
+        rewards = []
+        success = 0
+        images = []
+        for i in range(12):
+            z_action = z[i*4: (i+1)*4]
+            next_observation, reward, done, info = env.step(z_action)
+            rewards.append(reward)
+            images.append(env.render_obs())
+            if done:
+                if info["grasp_success"]:
+                    success = 1
+                break
+        returns = sum(rewards)
+        returns_list.append(returns)
+        success_list.append(success)
+    print("at z id: ", z_id)
+    print("returns list: ", returns_list)
+    print("success list: ", success_list)
+    mean_returns = mean(returns_list)
+    mean_success = mean(success_list)
+    print("mean returns: ", mean_returns)
+    print("mean success: ", mean_success)
+    return (mean_returns, mean_success)
 
 
 
@@ -203,6 +201,7 @@ def run_cem(
         reward_type="sparse",
         env_index=0,
         single_obj_reward=-1,
+        z_dir=None,
 
         extra_std=2.0,
         extra_decay_time=10,
@@ -216,30 +215,24 @@ def run_cem(
     print("output_dir: ", output_dir)
     ensure_dir(output_dir)
 
-    start = time.time()
-    num_episodes = epochs * num_process * batch_size
-    print('expt of {} total episodes'.format(num_episodes))
+    num_optimal = 2
 
-    num_elite = int(batch_size * elite_frac)
+    elites = np.load(z_dir, allow_pickle=True)
 
-    z_dim = 4 * 12
-    means = np.zeros(z_dim)
-    stds = np.ones(z_dim)
+    returns_successes = []
+    for n in range(num_optimal):
+        z = elites[n]
+        returns_successes_n = evaluate_z(z, randomize=randomize, reward_type=reward_type, output_dir=output_dir, 
+                                         z_id=n, env_index=env_index, single_obj_reward=single_obj_reward)
+        returns_successes.append(returns_successes_n)
 
-    for epoch in tqdm(range(epochs)):
+    returns_mean = [rs[0] for rs in returns_successes]
+    successes_mean = [rs[1] for rs in returns_successes]
 
-        returns_successes = [evaluate_z(z, randomize=randomize, reward_type=reward_type,
-                          output_dir=output_dir, epoch=epoch, env_index=env_index, single_obj_reward=single_obj_reward) for z in elites[:num_optimal]]
-
-        print(returns_successes)
-        returns = [rs[0] for rs in returns_successes]
-        successes = [rs[1] for rs in returns_successes]
-
-        returns = np.array(returns)
-        successes = np.array(successes)
-
-        elites = zs[indexes]
-
+    returns_mean = np.array(returns_mean)
+    successes_mean = np.array(successes_mean)
+    print("returns mean: ", returns_mean)
+    print("successes mean: ", successes_mean)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -252,6 +245,7 @@ if __name__ == '__main__':
     parser.add_argument('--reward_type', default="sparse", type=str)
     parser.add_argument('--env_index', default=0, type=int)
     parser.add_argument('--single_obj_reward', required=True, type=int)
+    parser.add_argument('--z_dir', required=True, type=str)
     args = parser.parse_args()
     print(args)
 
@@ -264,4 +258,5 @@ if __name__ == '__main__':
             reward_type=args.reward_type,
             env_index=args.env_index,
             single_obj_reward=args.single_obj_reward,
+            z_dir=args.z_dir,
             )
