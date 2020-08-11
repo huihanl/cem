@@ -189,10 +189,23 @@ def evaluate_z(z, randomize, reward_type, output_dir, epoch, env_index, single_o
     return (returns, success, log_prob_sum)
 
 def generate_trimodal_positions():
-    object_position_low = (.60, .05, -.20),
-    object_position_high = (.80, .25, -.20),
-    new_pos = np.random.uniform(low=object_position_low, high=object_position_high)
-    return new_pos
+    object_position_low = (.60, .05, -.20)
+    object_position_high = (.80, .25, -.20)
+
+    min_distance_threshold = 0.08
+    
+    object_positions = []
+
+    while len(object_positions) < 3:
+        new_pos = np.random.uniform(low=object_position_low, high=object_position_high)
+        okay = True
+        for pos in object_positions:
+            if np.linalg.norm(pos - new_pos) < min_distance_threshold:
+                okay = False
+        if okay:
+            object_positions.append(new_pos)
+
+    return object_positions
 
 def run_cem(
         env_id,
