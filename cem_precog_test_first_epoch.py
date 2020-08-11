@@ -227,7 +227,8 @@ def run_cem(
     have_success_list = []
     num_success_list = []
 
-    for env_trial in range(2): 
+    for env_trial in tqdm(range(2)): 
+
         epoch = 0
         print("current env trial: ", env_trial)
         extra_cov = max(1.0 - epoch / extra_decay_time, 0) * extra_std**2
