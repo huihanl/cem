@@ -118,7 +118,7 @@ def get_elite_indicies(num_elite, returns, successes, only_success_elite):
     return indexes
 
 
-def create_env(randomize, reward_type, env_index, single_obj_reward):
+def create_env(randomize, reward_type, env_index, single_obj_reward, trimodal_positions):
 
     model_dir_local = "/home/huihanl/precog_nick/logs/esp_train_results/2020-07/" \
                 "07-23-19-52-51_dataset.sawyer_dataset_no_append.SawyerDatasetNoAppend_bijection" \
@@ -135,13 +135,26 @@ def create_env(randomize, reward_type, env_index, single_obj_reward):
         observation_mode="pixels_debug", reward_type=reward_type,
         single_obj_reward=single_obj_reward,
         normalize_and_flatten=True,
-        )
+        all_random=True,
+        trimodal_positions=trimodal_positions)
 
     img_width, img_height = base_env.obs_img_dim, base_env.obs_img_dim
 
     env = PredictiveModelEnvWrapper(model_dir_aws, num_execution_per_step, base_env=base_env, img_dim=img_width)
 
     return env
+
+def create_env_action(randomize, reward_type, env_index, single_obj_reward, trimodal_positions):
+
+    base_env = roboverse.make(
+        "SawyerGraspOneV2-v0", gui=False, randomize=randomize,
+        observation_mode="pixels_debug", reward_type=reward_type,
+        single_obj_reward=single_obj_reward,
+        normalize_and_flatten=True,
+        all_random=True,
+        trimodal_positions=trimodal_positions)
+
+    return base_env
 
 def generate_video(video_frames, savedir, index, fps=60):
     assert fps == int(fps), fps
@@ -150,8 +163,11 @@ def generate_video(video_frames, savedir, index, fps=60):
     skvideo.io.vwrite(filename, video_frames, inputdict={'-r': str(int(fps))})
 
 
-def evaluate_z(z, randomize, reward_type, output_dir, epoch, env_index, single_obj_reward):
-    env = create_env(randomize, reward_type, env_index, single_obj_reward)
+def evaluate_z(z, randomize, reward_type, output_dir, epoch, env_index, single_obj_reward, trimodal_positions, use_rl_action):
+    if use_rl_action:
+        env = create_env_action(randomize, reward_type, env_index, single_obj_reward, trimodal_positions)
+    else:
+        env = create_env(randomize, reward_type, env_index, single_obj_reward, trimodal_positions)
     env.reset()
     rewards = []
     success = 0
@@ -172,7 +188,11 @@ def evaluate_z(z, randomize, reward_type, output_dir, epoch, env_index, single_o
 
     return (returns, success, log_prob_sum)
 
-
+def generate_trimodal_positions():
+    object_position_low = (.60, .05, -.20),
+    object_position_high = (.80, .25, -.20),
+    new_pos = np.random.uniform(low=object_position_low, high=object_position_high)
+    return new_pos
 
 def run_cem(
         env_id,
@@ -186,6 +206,7 @@ def run_cem(
         reward_type="sparse",
         env_index=0,
         single_obj_reward=-1,
+        use_rl_action=False,
 
         extra_std=2.0,
         extra_decay_time=10,
@@ -206,9 +227,9 @@ def run_cem(
     have_success_list = []
     num_success_list = []
 
-    for env_trial in range(100): 
+    for env_trial in range(2): 
         epoch = 0
-        print("current epoch number: ", epoch)
+        print("current env trial: ", env_trial)
         extra_cov = max(1.0 - epoch / extra_decay_time, 0) * extra_std**2
 
         zs = np.random.multivariate_normal(
@@ -217,10 +238,14 @@ def run_cem(
             size=batch_size
         )
 
+        trimodal_positions = generate_trimodal_positions()
+
         with Pool(num_process) as p:
             returns_successes = p.map(partial(evaluate_z, randomize=randomize, reward_type=reward_type, 
                                               output_dir=output_dir, epoch=epoch, env_index=env_index, 
-                                              single_obj_reward=single_obj_reward), zs)
+                                              single_obj_reward=single_obj_reward,
+                                              trimodal_positions=trimodal_positions,
+                                              use_rl_action=use_rl_action), zs)
 
         print(returns_successes)
         returns = [rs[0] for rs in returns_successes]
@@ -257,6 +282,7 @@ if __name__ == '__main__':
     parser.add_argument('--reward_type', default="sparse", type=str)
     parser.add_argument('--env_index', default=0, type=int)
     parser.add_argument('--single_obj_reward', required=True, type=int)
+    parser.add_argument('--use_rl_action', default=False, type=bool)
     args = parser.parse_args()
     print(args)
 
@@ -269,4 +295,5 @@ if __name__ == '__main__':
             reward_type=args.reward_type,
             env_index=args.env_index,
             single_obj_reward=args.single_obj_reward,
+            use_rl_action=args.use_rl_action
             )
