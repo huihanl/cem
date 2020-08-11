@@ -172,21 +172,21 @@ def evaluate_z(z, randomize, reward_type, output_dir, epoch, env_index, single_o
     rewards = []
     success = 0
     images = []
-    log_probs = []
+    #log_probs = []
     for i in range(12):
         z_action = z[i*4: (i+1)*4]
         next_observation, reward, done, info = env.step(z_action)
         rewards.append(reward)
         images.append(env.render_obs())
-        log_probs.append(info["log_prob"])
+        #log_probs.append(info["log_prob"])
         if done:
             if info["grasp_success"]:
                 success = 1
             break
     returns = sum(rewards)
-    log_prob_sum = sum(log_probs)
+    #log_prob_sum = sum(log_probs)
 
-    return (returns, success, log_prob_sum)
+    return (returns, success)#, log_prob_sum)
 
 def generate_trimodal_positions():
     object_position_low = (.60, .05, -.20)
@@ -240,7 +240,7 @@ def run_cem(
     have_success_list = []
     num_success_list = []
 
-    for env_trial in tqdm(range(2)): 
+    for env_trial in tqdm(range(4)): 
 
         epoch = 0
         print("current env trial: ", env_trial)
@@ -264,7 +264,7 @@ def run_cem(
         print(returns_successes)
         returns = [rs[0] for rs in returns_successes]
         successes = [rs[1] for rs in returns_successes]
-        log_prob_sum = [rs[2] for rs in returns_successes]
+        #log_prob_sum = [rs[2] for rs in returns_successes]
         print("successes: ")
         print(successes)
 
@@ -275,10 +275,10 @@ def run_cem(
         num_success_list.append(np.count_nonzero(successes))
 
 
-    print("whether each trial have success: ")
-    print(have_success_list)
-    print("total number of success for each trial: ")
-    print(num_success_list)
+        print("whether each trial have success: ")
+        print(have_success_list)
+        print("total number of success for each trial: ")
+        print(num_success_list)
 
     have_success_list = np.array(have_success_list)
     num_success_list = np.array(num_success_list)
