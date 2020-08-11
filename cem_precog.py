@@ -58,7 +58,7 @@ class PredictiveModelEnvWrapper:
         z = action
         obs = self.base_env.get_observation()
         obs = obs["image"].reshape([self.img_dim, self.img_dim, 3]) * 255
-        real_action = self.predictive_model.predict(self.past[-self.past_length:], obs, z)
+        real_action, log_prob = self.predictive_model.predict(self.past[-self.past_length:], obs, z)
         total_reward = 0
         for i in range(self.num_execution_per_step):
             first_predicted_action = real_action[0, 0, 0, i]
@@ -67,6 +67,7 @@ class PredictiveModelEnvWrapper:
             a = np.array([x, y, z, theta])
             a = (a * stddev) + mean
             obs, reward, done, info = self.base_env.step(a)
+            info["log_prob"] = log_prob
             total_reward += reward
 
             quat = obs["state"][3:7]
@@ -189,16 +190,19 @@ def evaluate_z(z, randomize, reward_type, output_dir, epoch, env_index, single_o
     rewards = []
     success = 0
     images = []
+    log_probs = []
     for i in range(12):
         z_action = z[i*4: (i+1)*4]
         next_observation, reward, done, info = env.step(z_action)
         rewards.append(reward)
         images.append(env.render_obs())
+        log_probs.append(info["log_prob"])
         if done:
             if info["grasp_success"]:
                 success = 1
             break
     returns = sum(rewards)
+    log_prob_sum = sum(log_probs)
 
     """
     if True: #epoch % 5 == 0:
@@ -213,7 +217,7 @@ def evaluate_z(z, randomize, reward_type, output_dir, epoch, env_index, single_o
         #except:
         #    pass
     """
-    return (returns, success)
+    return (returns, success, log_prob_sum)
 
 
 
@@ -270,7 +274,11 @@ def run_cem(
         print(returns_successes)
         returns = [rs[0] for rs in returns_successes]
         successes = [rs[1] for rs in returns_successes]
-
+        log_prob_sum = [rs[2] for rs in returns_successes]
+        print("successes: ")
+        print(successes)
+        print("log prob sum: ")
+        print(log_prob_sum)
         returns = np.array(returns)
         successes = np.array(successes)
 
